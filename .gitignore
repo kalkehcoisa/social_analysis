@@ -1,0 +1,73 @@
+# macOS 
+.DS_Store
+.AppleDouble
+.LSOverride
+Icon?
+._*
+.Spotlight-V8
+.Trashes
+.fseventsd
+.VolumeIcon.icns
+.com.apple.timemachine.donotpresent
+
+# Python 
+__pycache__/
+__pycache__
+*.py[cod]
+*$py.class
+*.pyo
+*.pyd
+.Python
+pip-log.txt
+pip-delete-this-directory.txt
+.venv/
+venv/
+env/
+ENV/
+.env
+*.egg
+*.egg-info/
+dist/
+build/
+eggs/
+parts/
+var/
+sdist/
+develop-eggs/
+.installed.cfg
+lib/
+lib64/
+
+# Jupyter 
+.ipynb_checkpoints/
+*.ipynb
+
+# Dados — arquivos de entrada 
+dataset/*.zst
+dataset/*.bz2
+dataset/*.gz
+dataset/*.tar
+dataset/*.zip
+dataset/*.rar
+dataset/*.7z
+
+# Dados — CSVs gerados pelos scripts 
+dataset/*.csv
+dataset/neo4j_import/*.csv
+
+# Dados — cache e estado dos scripts 
+dataset/_*.json
+dataset/_*.db
+dataset/neo4j_import/_*.json
+
+# IDEs 
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Misc 
+*.log
+*.tmp
+*.bak

@@ -1,0 +1,20 @@
+[project]
+name = "social-analysis"
+version = "0.1.0"
+description = ""
+authors = [
+    {name = "Jayme Tosi Neto",email = "jaymetosineto@gmail.com"}
+]
+readme = "README.md"
+requires-python = ">=3.14"
+dependencies = [
+    "zstandard (>=0.25.0,<0.26.0)",
+    "vadersentiment (>=3.3.2,<4.0.0)",
+    "psutil (>=7.2.2,<8.0.0)",
+    "numpy (>=2.4.2,<3.0.0)"
+]
+
+
+[build-system]
+requires = ["poetry-core>=2.0.0,<3.0.0"]
+build-backend = "poetry.core.masonry.api"
