@@ -16,12 +16,8 @@ Arquivos gerados em neo4j_import/:
     neo4j_belongs_to.csv    → (:Submission)-[:BELONGS_TO]->(:Subreddit)
     neo4j_active_in.csv     → (:User)-[:ACTIVE_IN]->(:Subreddit)
 
-  Script:
-    import_command.sh       → comando neo4j-admin pronto para executar
-
 Uso:
   python prepare_neo4j_import.py
-  Depois execute: bash neo4j_import/import_command.sh
 """
 
 import csv
@@ -29,7 +25,7 @@ import json
 import os
 from collections import defaultdict
 
-# ── Configuração ──────────────────────────────────────────────────────────────
+# Configuração 
 
 DATASET_DIR      = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'dataset'))
 NEO4J_DIR        = os.path.join(DATASET_DIR, "neo4j_import")
@@ -59,7 +55,7 @@ NEO4J_IMPORT_DIR = os.path.join(os.path.expanduser("~"), "neo4j-data", "import")
 # Diretório local para os dados do banco
 NEO4J_DATA_DIR = os.path.join(os.path.expanduser("~"), "neo4j-data", "data")
 
-# ── Estado de execução ────────────────────────────────────────────────────────
+# Estado de execução 
 
 def load_state():
     if os.path.exists(STATE_FILE):
@@ -77,7 +73,7 @@ def mark_done(state, step, **metadata):
 def is_done(state, step):
     return state.get(step, {}).get("done", False)
 
-# ── Utilitários ───────────────────────────────────────────────────────────────
+# Utilitários 
 
 def iter_csv(filepath):
     """Itera um CSV linha a linha sem carregar tudo na memória."""
@@ -91,10 +87,10 @@ def open_writer(filepath, fieldnames):
     writer.writerow(fieldnames)
     return f, writer
 
-# ── Passos ────────────────────────────────────────────────────────────────────
+# Passos 
 
 def step_nodes_users(state):
-    print("[ 1/5 ] Gerando neo4j_users.csv...")
+    print("[ 1/4 ] Gerando neo4j_users.csv...")
     f, writer = open_writer(
         os.path.join(NEO4J_DIR, "neo4j_users.csv"),
         ["username:ID(User)"]
@@ -118,7 +114,7 @@ def step_nodes_submissions_and_derived(state):
       - neo4j_belongs_to.csv    (Submission-[:BELONGS_TO]->Subreddit)
       - neo4j_active_in.csv     (User-[:ACTIVE_IN]->Subreddit)
     """
-    print("[ 2/5 ] Gerando submissions, subreddits e arestas derivadas...")
+    print("[ 2/4 ] Gerando submissions, subreddits e arestas derivadas...")
 
     f_sub, w_sub = open_writer(
         os.path.join(NEO4J_DIR, "neo4j_submissions.csv"),
@@ -190,7 +186,7 @@ def step_nodes_submissions_and_derived(state):
 
 
 def step_edges_interacted(state):
-    print("[ 3/5 ] Gerando neo4j_interacted.csv...")
+    print("[ 3/4 ] Gerando neo4j_interacted.csv...")
     f, writer = open_writer(
         os.path.join(NEO4J_DIR, "neo4j_interacted.csv"),
         [":START_ID(User)", ":END_ID(User)", "sentiment_sum:FLOAT", "interaction_count:INT", "sentiment_avg:FLOAT"]
@@ -211,62 +207,8 @@ def step_edges_interacted(state):
     mark_done(state, "step_3_interacted", count=count)
 
 
-def step_generate_import_command(state):
-    print("[ 4/5 ] Gerando import_command.sh...")
-
-    imp = "/import"
-    cmd = """\
-#!/bin/bash
-# Comando gerado automaticamente por prepare_neo4j_import.py
-#
-# Pré-requisitos:
-#   1. Os CSVs devem estar em {import_dir}
-#   2. O container Neo4j deve estar parado
-#
-# Uso:
-#   bash import_command.sh
-
-set -e
-
-echo ">>> Iniciando importação..."
-
-docker run --rm \\
-  -v "{import_dir}:/import" \\
-  -v "{data_dir}:/data" \\
-  {image} \\
-  neo4j-admin database import full \\
-    --nodes=User="{imp}/neo4j_users.csv" \\
-    --nodes=Submission="{imp}/neo4j_submissions.csv" \\
-    --nodes=Subreddit="{imp}/neo4j_subreddits.csv" \\
-    --relationships=INTERACTED="{imp}/neo4j_interacted.csv" \\
-    --relationships=POSTED="{imp}/neo4j_posted.csv" \\
-    --relationships=BELONGS_TO="{imp}/neo4j_belongs_to.csv" \\
-    --relationships=ACTIVE_IN="{imp}/neo4j_active_in.csv" \\
-    --delimiter="," \\
-    --ignore-empty-strings=true \\
-    --bad-tolerance=0 \\
-    --overwrite-destination \\
-    --verbose \\
-    {database}
-
-echo ">>> Importação concluída! Inicie o Neo4j com neo4j-docker.sh"
-""".format(
-        import_dir=NEO4J_IMPORT_DIR,
-        data_dir=NEO4J_DATA_DIR,
-        image=NEO4J_IMAGE,
-        imp=imp,
-        database=NEO4J_DATABASE,
-    )
-
-    sh_path = os.path.join(NEO4J_DIR, "import_command.sh")
-    with open(sh_path, "w", encoding="utf-8") as f:
-        f.write(cmd)
-    print(f"         Salvo em: {sh_path}")
-    mark_done(state, "step_4_command")
-
-
 def step_print_summary(state):
-    print("\n[ 5/5 ] Resumo:")
+    print("\n[ 4/4 ] Resumo:")
     print(f"   neo4j_users.csv       → {state['step_1_users']['count']:,} nós User")
     print(f"   neo4j_submissions.csv → {state['step_2_derived']['submissions']:,} nós Submission")
     print(f"   neo4j_subreddits.csv  → {state['step_2_derived']['subreddits']:,} nós Subreddit")
@@ -274,9 +216,8 @@ def step_print_summary(state):
     print(f"   neo4j_posted.csv      → {state['step_2_derived']['submissions']:,} arestas POSTED")
     print(f"   neo4j_belongs_to.csv  → {state['step_2_derived']['submissions']:,} arestas BELONGS_TO")
     print(f"   neo4j_active_in.csv   → {state['step_2_derived']['active_in']:,} arestas ACTIVE_IN")
-    print(f"\n   ⚠️  Copie os CSVs para {NEO4J_IMPORT_DIR} antes de executar o import_command.sh")
 
-# ── Entry point ───────────────────────────────────────────────────────────────
+# Entry point 
 
 if __name__ == "__main__":
     os.makedirs(NEO4J_DIR, exist_ok=True)
@@ -287,24 +228,20 @@ if __name__ == "__main__":
         print(f"⚡ Retomando — etapas já concluídas: {', '.join(completed)}\n")
 
     if is_done(state, "step_1_users"):
-        print("[ 1/5 ] neo4j_users.csv já gerado, pulando...")
+        print("[ 1/4 ] neo4j_users.csv já gerado, pulando...")
     else:
         step_nodes_users(state)
 
     if is_done(state, "step_2_derived"):
-        print("[ 2/5 ] Submissions, subreddits e arestas derivadas já geradas, pulando...")
+        print("[ 2/4 ] Submissions, subreddits e arestas derivadas já geradas, pulando...")
     else:
         step_nodes_submissions_and_derived(state)
 
     if is_done(state, "step_3_interacted"):
-        print("[ 3/5 ] neo4j_interacted.csv já gerado, pulando...")
+        print("[ 3/4 ] neo4j_interacted.csv já gerado, pulando...")
     else:
         step_edges_interacted(state)
 
-    if is_done(state, "step_4_command"):
-        print("[ 4/5 ] import_command.sh já gerado, pulando...")
-    else:
-        step_generate_import_command(state)
 
     mark_done(state, "completed")
     step_print_summary(state)

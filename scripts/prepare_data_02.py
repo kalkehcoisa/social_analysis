@@ -19,9 +19,8 @@ import csv
 import json
 import os
 import numpy as np
-from collections import defaultdict
 
-# ── Configuração ──────────────────────────────────────────────────────────────
+# Configuração 
 
 DATASET_DIR      = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'dataset'))
 USERS_FILE       = os.path.join(DATASET_DIR, "users.csv")
@@ -33,7 +32,7 @@ TMP_SUFFIX = ".tmp"
 
 MIN_INTERACTION_PERCENTILE = 5
 
-# ── Estado de execução ────────────────────────────────────────────────────────
+# Estado de execução 
 
 def load_state():
     if os.path.exists(STATE_FILE):
@@ -51,7 +50,16 @@ def mark_done(state, step, **metadata):
 def is_done(state, step):
     return state.get(step, {}).get("done", False)
 
-# ── Utilitários de streaming ──────────────────────────────────────────────────
+
+def rebuild_valid_users(valid_users):
+    # Reconstrói valid_users do arquivo já filtrado
+    for row in iter_csv(RELATIONS_FILE):
+        valid_users.add(row["source_author"])
+        valid_users.add(row["target_author"])
+    return valid_users
+
+
+# Utilitários de streaming 
 
 def iter_csv(filepath):
     """Itera um CSV linha a linha sem carregar tudo na memória."""
@@ -63,7 +71,7 @@ def atomic_replace(tmp_path, final_path):
     """Substitui o arquivo final pelo temporário atomicamente."""
     os.replace(tmp_path, final_path)
 
-# ── Passos de limpeza ─────────────────────────────────────────────────────────
+# Passos de limpeza 
 
 def step_calc_threshold(state):
     """
@@ -195,47 +203,47 @@ def step_filter_users(state, valid_users):
 
     mark_done(state, "step_4_users", kept=kept, removed=removed)
 
-# ── Entry point ───────────────────────────────────────────────────────────────
+# Entry point 
 
 if __name__ == "__main__":
     state = load_state()
+    valid_users = None
 
     if state:
         completed = [k for k, v in state.items() if v.get("done")]
         print(f"⚡ Retomando limpeza — etapas já concluídas: {', '.join(completed)}\n")
 
-    # ── Passo 1: calcular threshold ───────────────────────────────────────────
+    # Passo 1: calcular threshold 
     if is_done(state, "step_1_threshold"):
         threshold = state["step_1_threshold"]["threshold"]
         print(f"[ 1/4 ] Threshold já calculado ({threshold}), pulando...")
     else:
         threshold = step_calc_threshold(state)
 
-    # ── Passo 2: filtrar relações ─────────────────────────────────────────────
+    # Passo 2: filtrar relações 
     if is_done(state, "step_2_relations"):
         print("[ 2/4 ] Relações já filtradas, pulando...")
-        # Reconstrói valid_users do arquivo já filtrado
-        valid_users = set()
-        for row in iter_csv(RELATIONS_FILE):
-            valid_users.add(row["source_author"])
-            valid_users.add(row["target_author"])
     else:
         valid_users = step_filter_relations(state, threshold)
 
-    # ── Passo 3: filtrar submissions ──────────────────────────────────────────
+    # Passo 3: filtrar submissions 
     if is_done(state, "step_3_submissions"):
         print("[ 3/4 ] Submissions já filtradas, pulando...")
     else:
+        if valid_users is None:
+            valid_users = rebuild_valid_users(valid_users)
         sub_authors = step_filter_submissions(state, valid_users)
         valid_users = valid_users | sub_authors
 
-    # ── Passo 4: filtrar usuários ─────────────────────────────────────────────
+    # Passo 4: filtrar usuários 
     if is_done(state, "step_4_users"):
         print("[ 4/4 ] Usuários já filtrados, pulando...")
     else:
+        if valid_users is None:
+            valid_users = rebuild_valid_users(valid_users)
         step_filter_users(state, valid_users)
 
-    # ── Resumo ────────────────────────────────────────────────────────────────
+    # Resumo 
     mark_done(state, "completed")
     print("\n✅ Limpeza concluída!")
     print(f"   Threshold aplicado : interaction_count >= {threshold}")

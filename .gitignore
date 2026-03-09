@@ -1,4 +1,7 @@
-# macOS 
+# Project
+output/_analysis_state.json
+
+# macOS
 .DS_Store
 .AppleDouble
 .LSOverride
@@ -10,8 +13,7 @@ Icon?
 .VolumeIcon.icns
 .com.apple.timemachine.donotpresent
 
-# Python 
-__pycache__/
+# Python
 __pycache__
 *.py[cod]
 *$py.class
@@ -38,11 +40,11 @@ develop-eggs/
 lib/
 lib64/
 
-# Jupyter 
+# Jupyter
 .ipynb_checkpoints/
 *.ipynb
 
-# Dados — arquivos de entrada 
+# Dados — arquivos de entrada
 dataset/*.zst
 dataset/*.bz2
 dataset/*.gz
@@ -51,23 +53,23 @@ dataset/*.zip
 dataset/*.rar
 dataset/*.7z
 
-# Dados — CSVs gerados pelos scripts 
+# Dados — CSVs gerados pelos scripts
 dataset/*.csv
 dataset/neo4j_import/*.csv
 
-# Dados — cache e estado dos scripts 
+# Dados — cache e estado dos scripts
 dataset/_*.json
 dataset/_*.db
 dataset/neo4j_import/_*.json
 
-# IDEs 
+# IDEs
 .idea/
 .vscode/
 *.swp
 *.swo
 *~
 
-# Misc 
+# Misc
 *.log
 *.tmp
 *.bak

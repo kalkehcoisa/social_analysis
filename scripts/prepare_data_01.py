@@ -25,7 +25,7 @@ import psutil
 import zstandard as zstd
 from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
 
-# ── Configuração ──────────────────────────────────────────────────────────────
+# Configuração 
 
 DATASET_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'dataset'))
 RC_FILE     = os.path.join(DATASET_DIR, "RC_2019-04.zst")
@@ -51,7 +51,12 @@ NUM_WORKERS     = max(1, _physical_cores - 2) if _physical_cores > 4 else _physi
 # Buffer de leitura: escala com workers até o limite de 4×16 MB
 READ_BUFFER = 2 ** 24 * min(NUM_WORKERS, 4)
 
-# ── Utilitários de I/O ────────────────────────────────────────────────────────
+# Utilitários de I/O 
+
+def iter_csv(filepath):
+    """Itera um CSV linha a linha sem carregar tudo na memória."""
+    with open(filepath, newline="", encoding="utf-8") as f:
+        yield from csv.DictReader(f)
 
 def open_zst(filepath):
     """Generator: descomprime .zst e itera linha a linha sem carregar na memória."""
@@ -117,8 +122,19 @@ def get_line_counts():
     print("         Contagem salva em cache.")
     return total_rs, total_rc
 
-# ── Estado de execução ───────────────────────────────────────────────────────
 
+def load_relations_comments_users():
+    # Recarrega relações do CSV
+    relations     = defaultdict(lambda: [0.0, 0])
+    comment_users = set()
+    for row in iter_csv(os.path.join(OUT_DIR, "user_relations.csv")):
+        key = (row["source_author"], row["target_author"])
+        relations[key] = [float(row["sentiment_sum"]), int(row["interaction_count"])]
+        comment_users.add(row["source_author"])
+    return relations, comment_users
+
+
+# Estado de execução 
 def load_state():
     """Carrega o estado de execução salvo, ou retorna estado vazio."""
     if os.path.exists(STATE_FILE):
@@ -137,8 +153,7 @@ def mark_done(state, step, **metadata):
 def is_done(state, step):
     return state.get(step, {}).get("done", False)
 
-# ── SQLite ────────────────────────────────────────────────────────────────────
-
+# SQLite 
 def setup_db(conn):
     """Cria tabelas de índice para submissions e comentários."""
     conn.executescript("""
@@ -163,8 +178,17 @@ def lookup_author(conn, prefix, parent_id_clean):
     ).fetchone()
     return row[0] if row else None
 
-# ── VADER (executado nos worker processes) ────────────────────────────────────
 
+def read_all_users():
+    all_users = set()
+    for row in iter_csv(os.path.join(OUT_DIR, "users.csv")):
+        all_users.add(row["username"])
+    return all_users
+
+def read_sub_users():
+    return {row["author"] for row in iter_csv(os.path.join(OUT_DIR, "submissions.csv"))}
+
+# VADER (executado nos worker processes) 
 def process_batch(batch):
     """Roda VADER em cada item do lote. Cada worker instancia seu próprio analyzer."""
     analyzer = SentimentIntensityAnalyzer()
@@ -173,7 +197,7 @@ def process_batch(batch):
         for author, body, prefix, parent_id_clean in batch
     ]
 
-# ── Passos do pipeline ────────────────────────────────────────────────────────
+# Passos do pipeline 
 
 def step_count_lines():
     print("[ 0/5 ] Contando linhas dos arquivos (para progresso)...")
@@ -345,81 +369,74 @@ def step_export_users(sub_users, comment_users, relations):
     print(f"         {len(all_users):,} usuários únicos exportados.")
     return all_users
 
-# ── Entry point ───────────────────────────────────────────────────────────────
+# Entry point 
 
 if __name__ == "__main__":
     os.makedirs(OUT_DIR, exist_ok=True)
     state = load_state()
+    relations, comment_users, all_users, sub_users = {}, {}, {}, {}
 
     if state:
         completed = [k for k, v in state.items() if v.get("done")]
         print(f"⚡ Retomando execução — etapas já concluídas: {', '.join(completed)}")
 
-    # ── Passo 0: contagem de linhas ───────────────────────────────────────────
+    # Passo 0: contagem de linhas 
     total_rs, total_rc = step_count_lines()
 
-    # ── Conexão SQLite ────────────────────────────────────────────────────────
+    # Conexão SQLite 
     conn = sqlite3.connect(DB_FILE)
     conn.execute("PRAGMA journal_mode=WAL")
     conn.execute("PRAGMA synchronous=NORMAL")
     setup_db(conn)
 
-    # ── Passo 1: indexar submissions ──────────────────────────────────────────
+    # Passo 1: indexar submissions 
     if is_done(state, "step_1_submissions"):
         print("[ 1/5 ] Submissions já indexadas, pulando...")
         sub_count = state["step_1_submissions"]["sub_count"]
-        sub_users = set()  # reconstruído no passo 5 a partir dos CSVs
     else:
         sub_count, sub_users = step_index_submissions(conn, total_rs)
         mark_done(state, "step_1_submissions", sub_count=sub_count)
 
-    # ── Passo 2: indexar comentários ──────────────────────────────────────────
+    # Passo 2: indexar comentários 
     if is_done(state, "step_2_comments"):
         print("[ 2/5 ] Comentários já indexados, pulando...")
     else:
         step_index_comments(conn, total_rc)
         mark_done(state, "step_2_comments")
 
-    # ── Passo 3: sentimento ───────────────────────────────────────────────────
+    # Passo 3: sentimento 
     if is_done(state, "step_3_sentiment"):
         print("[ 3/5 ] Sentimento já processado, pulando...")
-        # Recarrega relações do CSV para os passos seguintes
-        relations     = defaultdict(lambda: [0.0, 0])
-        comment_users = set()
-        with open(os.path.join(OUT_DIR, "user_relations.csv"), newline="", encoding="utf-8") as f:
-            for row in csv.DictReader(f):
-                key = (row["source_author"], row["target_author"])
-                relations[key] = [float(row["sentiment_sum"]), int(row["interaction_count"])]
-                comment_users.add(row["source_author"])
     else:
         relations, comment_users = step_process_sentiment(conn, total_rc)
         mark_done(state, "step_3_sentiment", pairs=len(relations))
 
     conn.close()
 
-    # ── Passo 4: exportar relações ────────────────────────────────────────────
+    # Passo 4: exportar relações 
     if is_done(state, "step_4_relations"):
         print("[ 4/5 ] user_relations.csv já exportado, pulando...")
     else:
+        if len(relations) == 0:
+            relations, comment_users = load_relations_comments_users()
         step_export_relations(relations)
         mark_done(state, "step_4_relations")
 
-    # ── Passo 5: exportar usuários ────────────────────────────────────────────
+    # Passo 5: exportar usuários 
     if is_done(state, "step_5_users"):
         print("[ 5/5 ] users.csv já exportado, pulando...")
-        all_users = set()
-        with open(os.path.join(OUT_DIR, "users.csv"), newline="", encoding="utf-8") as f:
-            for row in csv.DictReader(f):
-                all_users.add(row["username"])
     else:
+        if len(relations) == 0:
+            relations, comment_users = load_relations_comments_users()
         # Reconstrói sub_users do CSV se o passo 1 foi pulado
+        if len(all_users) == 0:
+            all_users = read_all_users()
         if not sub_users:
-            with open(os.path.join(OUT_DIR, "submissions.csv"), newline="", encoding="utf-8") as f:
-                sub_users = {row["author"] for row in csv.DictReader(f)}
+            sub_users = read_sub_users()
         all_users = step_export_users(sub_users, comment_users, relations)
         mark_done(state, "step_5_users", user_count=len(all_users))
 
-    # ── Limpeza ───────────────────────────────────────────────────────────────
+    # Limpeza 
     if KEEP_DB:
         print(f"\n         Banco de índices mantido em: {os.path.abspath(DB_FILE)}")
         print("         (defina KEEP_DB = False para apagá-lo automaticamente)")
