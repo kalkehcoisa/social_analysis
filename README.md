@@ -44,11 +44,11 @@ Os CSVs processados estão disponíveis no Kaggle [aqui](https://www.kaggle.com/
 
 ```mermaid
 graph LR
-    U(["👤 User\n---\nusername"])
-    S(["📝 Submission\n---\npost_id\nscore"])
-    R(["🏘️ Subreddit\n---\nname"])
+    U(["👤 User\nusername"])
+    S(["📝 Submission\npost_id · score"])
+    R(["🏘️ Subreddit\nname"])
 
-    U -->|"INTERACTED\n---\nsentiment_sum\ninteraction_count\nsentiment_avg"| U
+    U -->|"INTERACTED\nsentiment_sum · interaction_count · sentiment_avg"| U
     U -->|POSTED| S
     U -->|ACTIVE_IN| R
     S -->|BELONGS_TO| R
